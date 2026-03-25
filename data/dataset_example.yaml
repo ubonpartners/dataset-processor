@@ -1,0 +1,117 @@
+datasets:
+  # A worked example showing the typical flow:
+  #   import -> (optional) sample -> (optional) make_hard -> chunked augmentations -> backgrounds
+  #
+  # Notes:
+  # - Almost every stage is optional: omit the key to disable it.
+  # - Many parameters can be made task-specific with *_train / *_val suffixes.
+  example_coco_people_faces:
+    general:
+      # Output classes (and order) in the generated dataset.yaml.
+      # Loaders map their source categories into this list.
+      class_names:
+        - person
+        - face
+
+      # Keypoint layout for the output dataset.
+      # face_kp: 5pt face keypoints (RetinaFace-style)
+      # pose_kp: 17pt COCO pose keypoints
+      face_kp: true
+      pose_kp: true
+
+      # Chunking lets you process huge datasets in fixed-size blocks.
+      # Each chunk runs the add_* stages, normalise, and (optional) attributes.
+      chunk_size: 10000
+
+      # Which splits to generate. Default is ["val","train"] if omitted.
+      tasks: ["val", "train"]
+
+      # Optional binary attributes for add_attributes/add_fiqa stages.
+      # Each attribute name is namespaced by object type.
+      attributes:
+        - person:is_male
+        - person:is_female
+        - person:is_wearing_hat_or_head_covering
+        - person:fiqa_0.45
+        - person:fiqa_0.65
+
+      # If false, this dataset entry is skipped unless force_generate=True (used by merge).
+      generate: true
+
+    import:
+      # Which dataset loader to use.
+      loader: CocoLoader
+
+      # Limit images imported per split.
+      max_images_train: 30000
+      max_images_val: 3000
+
+      # Optional image constraints for import (resize/transcode JPEGs).
+      max_width: 1920
+      max_height: 1920
+      max_bpp: 3.0
+
+      # Optional: remove near-duplicates after import.
+      dedup: true
+
+    sample:
+      # NEW STAGE: keep a deterministic subset (useful for fast iteration).
+      # If the imported dataset is larger than max_images, everything else is deleted.
+      max_images_train: 5000
+      max_images_val: 500
+      method: random    # random | first | last
+      seed: 123
+      rename: true
+      base_name: "ex_coco_s"  # renamed ex_coco_s0000000.jpg/.txt ...
+
+    make_hard:
+      # Optional: keep the hardest images according to a reference detector.
+      # Hardness includes FN + FP and can be biased towards rare classes.
+      max_images: 20000
+      model: "/mldata/weights/yolo11l.pt"
+      rare_classes: ["face"]
+
+    add_objects:
+      # Optional: run a detector and add high-confidence missing objects to GT.
+      # Multiple detectors can be chained, typically from fast->slow / small->big.
+      - model: "/mldata/weights/yolov9e.pt"
+        sz: 640
+        thr: 0.90
+        iou_thr: 0.50
+        min_sz: 0.0025   # roughly (0.05^2) in normalized area
+        per_class_thr: [0.90, 0.95]
+
+    add_pose:
+      # Optional: add missing 17pt pose keypoints to person GT using a pose model.
+      - model: "/mldata/weights/yolov8x-pose-p6.pt"
+        sz: 640
+        thr: 0.20
+
+    add_faces:
+      # Optional: add missing face boxes / 5pt keypoints.
+      - model: "/mldata/weights/yolo11x-face-051024.pt"
+        sz: 640
+        box_thr: 0.40
+        kp_thr: 0.40
+
+    add_fiqa:
+      # Optional: add FIQA-based binary attributes to person/face detections.
+      # Requires a detector that outputs fiqa_score. Thresholds are encoded in attributes above.
+      # (This stage uses those thresholds to write 0/1 into each GT's attrs vector.)
+      {}
+
+    add_attributes:
+      # Optional: run a vision LLM on cropped people to populate person:* attributes.
+      # Requires OPENAI_API_KEY if using an OpenAI-backed client in `stuff.simple_llm`.
+      llm-model: gpt-5-mini
+      prompt: "/mldata/config/prompts/person_attributes.txt"
+      cache_path: "/mldata/attribute_cache"
+      min_pose: 8
+
+    add_backgrounds:
+      # Optional: mine hard negatives (background-only images) and copy into the dataset.
+      loader: CocoLoader
+      model: "/mldata/weights/yolo11l.pt"
+      check_model: "/mldata/weights/yolov9e.pt"
+      max_images_val: 1000
+      max_images_train: 300

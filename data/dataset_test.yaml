@@ -1,0 +1,25 @@
+datasets:
+  coco:
+    notes: No face annotations
+    general:
+      inherit_config: dataset_test_default.yaml/default
+      generate: true
+    import:
+      loader: CocoLoader
+  widerface:
+    general:
+      inherit_config: dataset_default.yaml/default
+      generate: true
+    import:
+      loader: WiderfaceLoader
+    add_faces:
+    - model: "/mldata/weights/yolo11x-face-051024.pt"
+      sz: 640
+      kp_thr_train: 0.9 # widerfaces has boxes+KP for train but only boxes for val
+      kp_thr_val: 0.2   # so we use a lower thr for val KP
+      box_thr: 0.9
+    - model: "/mldata/weights/yolo11x-face-051024.pt"
+      sz: 1280
+      kp_thr_train: 0.9
+      kp_thr_val: 0.2
+      box_thr: 0.9

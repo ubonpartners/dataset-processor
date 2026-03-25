@@ -1,0 +1,32 @@
+name: dataset-processor
+channels:
+  - pytorch
+  - defaults
+  - conda-forge
+  - nvidia
+dependencies:
+  - python>=3.10
+  - pytorch>=2.4.0
+  - pytorch-cuda>=12.4
+  # torchvision/torchaudio should generally match the installed pytorch major/minor.
+  - torchvision>=0.19.0
+  - torchaudio>=2.4.0
+  # Core runtime deps used throughout the repo.
+  - numpy
+  - pyyaml
+  - pillow
+  - tqdm
+  - pandas
+  - matplotlib
+  - pip
+  - pycocotools>=2
+  - pip:
+    - opencv-python
+    - scipy
+    - psutil
+    - piexif
+    - xlsxwriter
+    - openai
+    - anthropic
+    - git+https://github.com/ubonpartners/stuff.git
+    - git+https://github.com/ubonpartners/ultralytics.git@multilabel

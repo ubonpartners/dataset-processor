@@ -1,0 +1,29 @@
+results_location: /mldata/results/map
+results_cache_file: /mldata/results/map_results.pkl
+classes: 
+    - person
+    - vehicle
+datasets:
+    - /mldata/v5-attr/coco-v5-attr/dataset.yaml
+models:
+    - /mldata/weights/yolov9c.pt 
+    - /mldata/weights/yolov9e.pt
+    - /mldata/weights/yolov8l.pt
+    - /mldata/weights/yolov10l.pt
+    - /mldata/weights/yolov10x.pt
+    - /mldata/weights/yolo11l.pt
+    - /mldata/weights/yolo11x.pt
+regen_models: []
+regen_datasets: []
+max_age_days: 21
+columns:
+    - person_ap50
+    - vehicle_ap50
+    - person-p
+    - person-r
+    - person_ap50_large
+    - vehicle_ap50_large
+sort_key: person_ap50
+chart_list:
+    - person_ap50 
+    - vehicle_ap50

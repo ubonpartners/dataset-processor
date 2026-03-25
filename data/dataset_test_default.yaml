@@ -1,0 +1,62 @@
+datasets:
+  default:
+    general:
+      # class names are the classes and ordering that will appear in the output YAML files
+      # each loader itself contains a list of class mappings it can use to populate the dataset
+      # for example man, woman, boy, etc all map to person in openimages
+      # you may need to extend the mappings there if you add new output classes
+      class_names:
+      - person
+      - face
+      # face_kp, pose_kp define whether the output datasets should have 5-point facial keypoints and/or
+      # 17 point coco-style pose keypoints
+      face_kp: true
+      pose_kp: true
+      chunk_size: 10000
+      generate: false
+    import:
+      loader: None
+      max_images_train: 30000
+      max_images_val: 3000
+    make_hard:
+      max_images: 15000
+      model: "/mldata/weights/yolo11l.pt"
+    add_objects:
+    - model: "/mldata/weights/yolov9e.pt"
+      sz: 512
+      per_class_thr:
+      - 0.9
+      - 0.95
+      - 0.9
+      - 0.95
+      - 0.95
+    - model: "/mldata/weights/yolo11x.pt"
+      sz: 960
+      per_class_thr:
+      - 0.9
+      - 0.95
+      - 0.9
+      - 0.95
+      - 0.95
+    add_pose:
+    - model: "/mldata/weights/yolov8x-pose-p6.pt"
+      sz: 640
+      thr: 0.2
+    - model: "/mldata/weights/yolo11x-pose.engine"
+      sz: 1280
+      thr: 0.2
+    add_faces:
+    - model: "/mldata/weights/yolo11x-face-051024.pt"
+      sz: 640
+      kp_thr: 0.2
+      box_thr: 0.2
+    - model: "/mldata/weights/yolo11x-face-051024.pt"
+      sz: 1280
+      kp_thr: 0.2
+      box_thr: 0.2
+    add_backgrounds:
+      model: "/mldata/weights/yolo11l.pt"
+      check_model: "/mldata/weights/yolov9e.pt"
+      loader: CocoLoader
+      max_images_val: 1000
+      max_images_train: 300

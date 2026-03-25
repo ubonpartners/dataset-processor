@@ -1,0 +1,22 @@
+__pycache__/
+src/__pycache__/
+src/llm/__pycache__/
+src/loaders/__pycache__/
+
+TRAINING_MACHINE.md
+FORMAT_REVIEW.md
+REVIEW.md
+
+# model weights
+*.pt
+*.pth
+
+# generated outputs
+output.jpg
+
+# one-off / local scripts
+cascade-mask-rcnn_*.py
+collect_jpg.py
+export_onnx.py
+export_trt.py
+infer_image.py
