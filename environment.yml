@@ -29,4 +29,4 @@ dependencies:
     - openai
     - anthropic
     - git+https://github.com/ubonpartners/stuff.git
-    - git+https://github.com/ubonpartners/ultralytics.git@multilabel
+    - git+https://github.com/ubonpartners/ultralytics.git@ubon26
