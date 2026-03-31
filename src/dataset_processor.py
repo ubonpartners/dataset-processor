@@ -1,5 +1,4 @@
 import src.dataset_util as dsu
-import stuff.inference_wrapper
 import cv2
 import os
 import shutil
@@ -250,21 +249,21 @@ class DatasetProcessor:
         self.rf_detr_model=None
         self.augment=False
 
-        self.od=stuff.inference_wrapper(od_model,
-                                        half=half,
-                                        rect=rect,
-                                        thr=thr,
-                                        batch_size=batch_size,
-                                        nms_thr=self.od_nms_thr,
-                                        imgsz=imgsz,
-                                        max_det=max_det,
-                                        class_names=self.class_names,
-                                        attributes=self.attributes,
-                                        face_kp=self.face_kp,
-                                        pose_kp=self.pose_kp,
-                                        facepose_kp=self.facepose_kp,
-                                        fold_attributes=self.fold_attributes,
-                                        get_feats=get_feats)
+        self.od=stuff.InferenceWrapper(od_model,
+                                       half=half,
+                                       rect=rect,
+                                       thr=thr,
+                                       batch_size=batch_size,
+                                       nms_thr=self.od_nms_thr,
+                                       imgsz=imgsz,
+                                       max_det=max_det,
+                                       class_names=self.class_names,
+                                       attributes=self.attributes,
+                                       face_kp=self.face_kp,
+                                       pose_kp=self.pose_kp,
+                                       facepose_kp=self.facepose_kp,
+                                       fold_attributes=self.fold_attributes,
+                                       get_feats=get_feats)
 
         self.od_num_params=self.od.yolo_num_params
         self.od_num_flops=self.od.yolo_num_flops
