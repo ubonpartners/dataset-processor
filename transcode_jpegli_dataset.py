@@ -6,7 +6,7 @@ Example:
         --src /mldata/v10 \
         --dst /mldata/v10-opt \
         --workers 8 \
-        --quality 92 \
+        --quality 90 \
         --max-side 1280
 """
 
@@ -173,7 +173,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Mirror dataset tree while transcoding JPEGs with jpegli.")
     parser.add_argument("--src", type=Path, required=True, help="Source dataset root (e.g. /mldata/v10)")
     parser.add_argument("--dst", type=Path, required=True, help="Destination root (e.g. /mldata/v10-opt)")
-    parser.add_argument("--quality", type=int, default=92, help="jpegli quality (default: 92)")
+    parser.add_argument("--quality", type=int, default=90, help="jpegli quality (default: 90)")
     parser.add_argument("--max-side", type=int, default=1280, help="Max long-edge for JPEG output (default: 1280)")
     parser.add_argument(
         "--workers",
