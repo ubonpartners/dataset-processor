@@ -94,6 +94,7 @@ def transcode_jpeg(
     dst: Path,
     quality: int,
     max_side: int,
+    min_reduction_pct: float,
     preserve_exif: bool,
     overwrite: bool,
 ) -> JobResult:
@@ -105,6 +106,7 @@ def transcode_jpeg(
     exif_bytes: bytes | None = None
     resized = False
     tmp_ppm_path: Path | None = None
+    tmp_jpeg_path: Path | None = None
 
     try:
         with Image.open(src) as im:
@@ -122,15 +124,36 @@ def transcode_jpeg(
 
         # Fast path for non-resized images: encode directly from source JPEG.
         input_for_encoder = tmp_ppm_path if tmp_ppm_path is not None else src
-        _run_cjpegli(input_for_encoder, dst, quality)
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp_jpg:
+            tmp_jpeg_path = Path(tmp_jpg.name)
+        _run_cjpegli(input_for_encoder, tmp_jpeg_path, quality)
 
         if preserve_exif and exif_bytes:
             # Re-insert original EXIF into transcoded JPEG when present.
             try:
-                piexif.insert(exif_bytes, str(dst))
+                piexif.insert(exif_bytes, str(tmp_jpeg_path))
             except Exception:
                 pass
 
+        encoded_bytes = tmp_jpeg_path.stat().st_size
+        reduction_ratio = (src_bytes - encoded_bytes) / max(src_bytes, 1)
+        min_reduction_ratio = min_reduction_pct / 100.0
+
+        if reduction_ratio < min_reduction_ratio:
+            # Keep source image if compression gain is too small (or negative).
+            shutil.copy2(src, dst)
+            dst_bytes = dst.stat().st_size
+            return JobResult(
+                True,
+                "jpeg_kept_original",
+                src_bytes,
+                dst_bytes,
+                False,
+                False,
+                f"reduction={reduction_ratio*100:.2f}% below threshold={min_reduction_pct:.2f}%",
+            )
+
+        shutil.move(str(tmp_jpeg_path), str(dst))
         shutil.copystat(src, dst, follow_symlinks=True)
         dst_bytes = dst.stat().st_size
         return JobResult(True, "jpeg", src_bytes, dst_bytes, resized, False)
@@ -148,12 +171,18 @@ def transcode_jpeg(
                 tmp_ppm_path.unlink()
             except OSError:
                 pass
+        if tmp_jpeg_path and tmp_jpeg_path.exists():
+            try:
+                tmp_jpeg_path.unlink()
+            except OSError:
+                pass
 
 
 def run_job(
     job: Job,
     quality: int,
     max_side: int,
+    min_reduction_pct: float,
     preserve_exif: bool,
     overwrite: bool,
 ) -> JobResult:
@@ -163,6 +192,7 @@ def run_job(
             dst=job.dst,
             quality=quality,
             max_side=max_side,
+            min_reduction_pct=min_reduction_pct,
             preserve_exif=preserve_exif,
             overwrite=overwrite,
         )
@@ -175,6 +205,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dst", type=Path, required=True, help="Destination root (e.g. /mldata/v10-opt)")
     parser.add_argument("--quality", type=int, default=90, help="jpegli quality (default: 90)")
     parser.add_argument("--max-side", type=int, default=1280, help="Max long-edge for JPEG output (default: 1280)")
+    parser.add_argument(
+        "--min-reduction-pct",
+        type=float,
+        default=10.0,
+        help="Keep original JPEG if size reduction is below this percent (default: 10)",
+    )
     parser.add_argument(
         "--workers",
         type=int,
@@ -211,7 +247,7 @@ def main() -> int:
     print(f"Destination: {dst}")
     print(f"Files found: {len(jobs)} (JPEG: {jpeg_jobs}, other: {other_jobs})")
     print(
-        f"Settings: quality={args.quality} max_side={args.max_side} "
+        f"Settings: quality={args.quality} max_side={args.max_side} min_reduction_pct={args.min_reduction_pct} "
         f"workers={args.workers} preserve_exif={preserve_exif} overwrite={args.overwrite}"
     )
 
@@ -220,6 +256,7 @@ def main() -> int:
     skipped = 0
     resized = 0
     fallback_copied = 0
+    kept_original_low_gain = 0
     src_jpeg_total = 0
     dst_jpeg_total = 0
 
@@ -230,6 +267,7 @@ def main() -> int:
                 job,
                 args.quality,
                 args.max_side,
+                args.min_reduction_pct,
                 preserve_exif,
                 args.overwrite,
             ): job
@@ -256,7 +294,9 @@ def main() -> int:
                     if result.action == "jpeg_fallback_copy":
                         fallback_copied += 1
                         print(f"[WARN] jpegli failed, copied original: {job.src} ({result.error})")
-                    if result.action in {"jpeg", "jpeg_fallback_copy"}:
+                    if result.action == "jpeg_kept_original":
+                        kept_original_low_gain += 1
+                    if result.action in {"jpeg", "jpeg_fallback_copy", "jpeg_kept_original"}:
                         src_jpeg_total += result.src_bytes
                         dst_jpeg_total += result.dst_bytes
                         if result.resized:
@@ -269,6 +309,7 @@ def main() -> int:
     print(f"Skipped: {skipped}")
     print(f"JPEG resized: {resized}")
     print(f"JPEG fallback-copied: {fallback_copied}")
+    print(f"JPEG kept-original (low gain): {kept_original_low_gain}")
     if src_jpeg_total > 0:
         saved = src_jpeg_total - dst_jpeg_total
         pct = (saved / src_jpeg_total) * 100.0
