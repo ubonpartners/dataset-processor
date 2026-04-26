@@ -35,8 +35,6 @@ def match_python(dets, gts, context):
         det_matched, _=dsu.match_boxes_pose(dets, gts, context["iou_thr"])
     elif context["type"]=="face":
         det_matched, _=dsu.match_boxes_face(dets, gts, context["iou_thr"])
-    elif context["type"]=="facepose":
-        det_matched, _=dsu.match_boxes_facepose(dets, gts, context["iou_thr"])
     else:
         assert False, f"unknown context type {context['type']}"
     return det_matched
@@ -49,8 +47,6 @@ def match_upyc(dets, gts, context):
         t=upyc.MATCH_TYPE_POSE_KP
     elif context["type"]=="face":
         t=upyc.MATCH_TYPE_FACE_KP
-    elif context["type"]=="facepose":
-        t=upyc.MATCH_TYPE_FACEPOSE_KP
     else:
         assert False, f"unknown context type {context['type']}"
     det_matched=[-1]*len(dets)
@@ -188,22 +184,21 @@ def compute_one_ap(dataset,
             dets=dets_by_class[cl]
             gts=gts_by_class[cl]
 
-            # fixme: hack; assumes all attributes are for person class and are after the main classes in the class list
             attr_base_index=None
             if cl==x.get_class_index("person"):
                 attr_base_index=next((i for i, s in enumerate(classes) if s.startswith(("person_", "person:"))), None)
 
             match_dets_to_gts(match_stats, "normal", cl, dets, gts, matcher, {"iou_thr":iou_thr, "type":"normal"}, attr_base_index)
             if measure_kp and (cl==x.get_class_index("person")):
-                # measuring pose point mAP from pose or facepose detection points on person class
+                # measuring pose point mAP from pose detection points on person class
                 gts_f=[g for g in gts if stuff.has_pose_points(g)]
                 dets_f=[d for d in dets if stuff.has_pose_points(d)]
                 match_dets_to_gts(match_stats, "kp", cl, dets_f, gts_f, matcher, {"iou_thr":iou_thr, "type":"pose"})
             if measure_kp and (cl==x.get_class_index("person")):
-                # measuring face point mAP from facepose detection points on person class
+                # measuring face point mAP from face detection points on person class
                 gts_f=[g for g in gts if stuff.has_face_points(g)]
                 dets_f=[d for d in dets if stuff.has_face_points(d)]
-                match_dets_to_gts(match_stats, "kp_face", cl, dets_f, gts_f, matcher, {"iou_thr":iou_thr, "type":"facepose"})
+                match_dets_to_gts(match_stats, "kp_face", cl, dets_f, gts_f, matcher, {"iou_thr":iou_thr, "type":"face"})
             if measure_kp and (cl==x.get_class_index("face")):
                 # measuring face point mAP from face detection points on face class
                 gts_f=[g for g in gts if stuff.has_face_points(g)]

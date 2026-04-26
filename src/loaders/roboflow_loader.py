@@ -76,7 +76,7 @@ class RoboflowLoader:
         img=self.img_path+"/"+self.all_img_files[img_id]
         label=img.replace("/images","/labels")
         label=os.path.splitext(label)[0]+".txt"
-        gts=du.load_ground_truth_labels(label)
+        gts=du.load_source_yolo_labels(label)
         if gts==None:
             print("Error: no gts for "+label)
             return None

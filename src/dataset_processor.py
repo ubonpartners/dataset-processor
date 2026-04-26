@@ -9,7 +9,7 @@ class DatasetProcessor:
                  class_names=None,
                  chunk_size=0,
                  append_log=False, print_log=False, face_kp=True, pose_kp=True,
-                 facepose_kp=False, fold_attributes=True):
+                 fold_attributes=True):
         self.chunk_size=chunk_size
         self.num_chunks=0
         self.ds_yaml=ds_yaml
@@ -19,8 +19,6 @@ class DatasetProcessor:
         assert self.ds_files is not None
         self.face_kp=face_kp
         self.pose_kp=pose_kp
-        self.facepose_kp=facepose_kp
-        assert self.facepose_kp==False, "facepose_kp not supported in dataset-processor"
         self.dataset_path=os.path.dirname(ds_yaml)
         self.append_log=append_log
         self.print_log=print_log
@@ -28,7 +26,7 @@ class DatasetProcessor:
             # if no class_names are passed we assume we want to set up the DP based
             # on whatever is in the yaml config
             class_names=self.ds_class_names
-            self.face_kp, self.pose_kp, self.facepose_kp=dsu.map_keypoint_shape(self.kp_shape)
+            self.face_kp, self.pose_kp=dsu.map_keypoint_shape(self.kp_shape)
             if fold_attributes and self.attributes is None:
                 self.attributes=dsu.attributes_from_class_names(self.ds_class_names)
                 print(f"Inferred dataset attributes: {self.attributes}")
@@ -75,6 +73,8 @@ class DatasetProcessor:
         person_class=self.get_class_index("person")
         for i in range(self.num_files):
             gts=self.get_gt(i)
+            if gts is None:
+                gts=[]
             has_small_persons=False
             for g in gts:
                 class_counts[g["class"]]+=1
@@ -121,7 +121,7 @@ class DatasetProcessor:
         label_file=self.ds_files[index]["label"]
         gts=dsu.load_ground_truth_labels(label_file, attr_nc=getattr(self, "attr_nc", 0), kpt_shape=getattr(self, "kp_shape", None))
         if gts is None:
-            return None
+            return []
         gt_class_remap=[self.class_names.index(x) if x in self.class_names else -1 for x in self.ds_class_names]
         for g in gts:
             ci=g["class"]
@@ -133,9 +133,8 @@ class DatasetProcessor:
         ret=[g for g in gts if g["class"]!=-1]
         if self.fold_attributes:
             ret=stuff.fold_detections_to_attributes(ret, self.class_names, self.attributes)
-        #print(f"remap keypoints {self.facepose_kp}")
         #print(label_file, ret)
-        stuff.map_keypoints(ret, self.face_kp, self.pose_kp, self.facepose_kp)
+        stuff.map_keypoints(ret, self.face_kp, self.pose_kp, False)
         return ret
 
     def get_gt_file_path(self, index):
@@ -152,7 +151,7 @@ class DatasetProcessor:
 
     def add(self, name, img_file, dets, add_exif=False, ignore_class=None,
             max_width=4096, max_height=4096, max_bpp=4, fix_orientation=False, yuv420=False):
-        stuff.map_keypoints(dets, self.face_kp, self.pose_kp, self.facepose_kp)
+        stuff.map_keypoints(dets, self.face_kp, self.pose_kp, False)
         dst_img=self.dataset_path+"/"+self.task+"/images/"+name+".jpg"
         dst_label=self.dataset_path+"/"+self.task+"/labels/"+name+".txt"
         shutil.copyfile(img_file, dst_img)
@@ -177,7 +176,7 @@ class DatasetProcessor:
 
         if add_exif:
             ok=stuff.image_append_exif_comment(dst_img, f"config={self.config_name};origin={img_file}")
-            if ok is False:
+            if not ok:
                 print(f"dataset_processor add: rejecting file {img_file}")
                 stuff.rm(dst_img)
                 return False
@@ -185,7 +184,6 @@ class DatasetProcessor:
         an_txt=dsu.write_annotations(dets_no_ignore,
                                      include_face=self.face_kp,
                                      include_pose=self.pose_kp,
-                                     include_facepose=self.facepose_kp,
                                      include_attrs=True)
 
         with open(dst_label, 'w') as file:
@@ -229,14 +227,14 @@ class DatasetProcessor:
                           max_det=600,
                           get_feats=False):
 
-        if self.od!=None:
+        if self.od is not None:
             del self.od
             self.od=None
 
         stuff.platform_stuff.platform_clear_caches()
         self.od_cache={}
 
-        if od_model==None:
+        if od_model is None:
             return
 
         self.imgsz=imgsz
@@ -261,7 +259,6 @@ class DatasetProcessor:
                                        attributes=self.attributes,
                                        face_kp=self.face_kp,
                                        pose_kp=self.pose_kp,
-                                       facepose_kp=self.facepose_kp,
                                        fold_attributes=self.fold_attributes,
                                        get_feats=get_feats)
 
@@ -292,14 +289,14 @@ class DatasetProcessor:
         return dsu.name_from_file(label_file)
 
     def replace_annotations(self, index, an):
-        txt=dsu.write_annotations(an, include_face=self.face_kp, include_pose=self.pose_kp, include_facepose=self.facepose_kp, include_attrs=True)
+        txt=dsu.write_annotations(an, include_face=self.face_kp, include_pose=self.pose_kp, include_attrs=True)
         label_file=self.get_gt_file_path(index)
         with open(label_file, 'w') as file:
             file.write(txt)
 
     def get_detections(self, index):
         out_det=[]
-        if self.od!=None:
+        if self.od is not None:
             out_det=self.od.infer_cached(index, self.num_files, self.get_img_path)
         return out_det
 

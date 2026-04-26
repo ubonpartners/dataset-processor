@@ -60,9 +60,11 @@ There are three main moving parts:
 
 1. **Loaders** (`src/loaders/*_loader.py`) — know how to read a source dataset (COCO, OpenImages, WiderFace, …) and return per-image annotations.
 
-2. **DatasetProcessor** (`src/dataset_processor.py`) — a wrapper around a generated dataset folder that can read/write YOLO label files, run a detector, and apply pipeline stages.
+2. **DatasetProcessor** (`src/dataset_processor.py`) — a wrapper around a generated split-v10 dataset folder that can read/write YOLO label files and run detectors.
 
-3. **Pipeline runner** (`build_dataset.py`) — reads a YAML/JSON config and executes stages in order to create datasets under `output_datasets/<name>`.
+3. **Pipeline stages** (`src/pipeline_stages.py`) — implementations for import, mining, pseudo-label, attributes, background, merge, and filtering stages.
+
+4. **Pipeline runner** (`build_dataset.py`) — expands and validates config, then dispatches registered stages in order to create datasets under `output_datasets/<name>`.
 
 ---
 
@@ -85,9 +87,9 @@ cls  x  y  w  h  attr_0 … attr_49  [kpt_x kpt_y kpt_v] × 22
 - `cls` ∈ {0,1,2,3,4} — main class only (person=0, face=1, vehicle=2, animal=3, weapon=4)
 - `attr_0 … attr_49` — binary attribute vector in [0, 1]
 - Keypoints: 22×3 = 66 floats (only on person/face boxes)
-- **Total columns**: 121 (pose) or 55 (detect-only)
+- **Total columns**: 121 with face+pose keypoints, or 55 without keypoints
 
-**Internal pipeline format**: during processing, labels use one row per object with `cls`, bbox, keypoints, then a literal `A` marker followed by the attribute vector. This is what `load_ground_truth_labels` reads and `write_annotations` writes. The final output step converts this to the `ubon26`-compatible format above.
+Dataset Processor now uses this split format throughout generated datasets. Third-party source datasets may be imported from their native YOLO-style labels by loaders, but generated labels never use the old `A` marker format.
 
 ---
 
@@ -113,7 +115,7 @@ general:
 
 Copies defaults from another config entry, then overlays your dataset-specific values.
 
-### Task-specific parameters
+### Split-specific parameters
 
 Many stage params can be split by dataset split (`max_images_train` / `max_images_val`). Internally handled by `dsu.get_param()`.
 
@@ -128,7 +130,7 @@ Typical flow:
 1. `import`
 2. optional filtering/mining: `llm_filter`, `sample`, `make_hard`
 3. chunked augmentation stages (run per chunk): `add_objects`, `mask_objects`, `add_pose`, `add_faces`, `add_fiqa`, `add_attributes`; `normalise` always runs once per chunk
-4. post-processing: `add_backgrounds`, `merge_facepose`, `filter_classes`
+4. post-processing: `add_backgrounds`, `export`, `filter_classes`
 5. optional `merge`
 
 ---
@@ -288,25 +290,21 @@ merge:
 
 ---
 
-### `merge_facepose` (optional, post-stage)
 
-Merges 5-point face keypoints from face boxes into the corresponding person boxes, producing the combined 22-point representation used in training.
+### `export` (optional, post-stage)
+
+Copies the generated split-v10 dataset to a named output dataset. This is useful when a merge or intermediate build should be materialized under a stable dataset name.
+
+| Key | Description |
+|-----|-------------|
+| `output_dataset_name` | Optional output dataset folder under `/mldata` |
+| `delete_existing` | Delete the input dataset after export |
 
 ---
 
 ### `filter_classes` (optional, post-stage)
 
 Removes classes from a dataset and remaps indices. Can also filter small instances or strip keypoints.
-
----
-
-## Worked example
-
-See [`data/dataset_example.yaml`](data/dataset_example.yaml) for a heavily-commented example demonstrating most stages.
-
-```bash
-python build_dataset.py --config data/dataset_example.yaml --test
-```
 
 ---
 

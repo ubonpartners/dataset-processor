@@ -353,7 +353,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, default="/mldata/v10/all/dataset.yaml", help='dataset to use')
     parser.add_argument('--model', type=str, default='/mldata/models/v10/trt/yolo11l-v10r-210825.pt', help='model to use')
     parser.add_argument('--task', type=str, default="val", help='val, train, or both')
-    parser.add_argument('--search', type=str, default=None, help='expand attributes to objects')
+    parser.add_argument('--search', type=str, default=None, help='search attributes to display matching crops')
     parser.add_argument('--video', type=str, default=None)
     parser.add_argument('--img', type=str, default=None)
     parser.add_argument('--output', type=str, default=None)

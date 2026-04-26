@@ -48,7 +48,7 @@ class WiderfaceLoader:
         label=self.labels+"/"+du.name_from_file(img)+".txt"
         if self.face_class_index is None:
             return []
-        gts=du.load_ground_truth_labels(label)
+        gts=du.load_source_yolo_labels(label)
         for g in gts:
             g["class"]=self.face_class_index
         return gts
