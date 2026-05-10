@@ -224,8 +224,9 @@ def make_dataset_yaml_v10(name, config_name=None,
                            attr_nc=ATTR_NC_V10):
     """
     Write dataset YAML in v10 (split) format for Ultralytics attributes branch:
-    nc=5, names (main classes), attributes: true, attr_nc=50, attr_label_format: "split", attr_names.
-    Creates directory structure. class_names should be the 5 main classes; attr_names the 50 attribute names.
+    nc=<len(class_names)>, names (main classes), attributes: true, attr_nc=50,
+    attr_label_format: "split", attr_names.
+    Creates directory structure. class_names should match the dataset config.
     """
     path = mldata_folder() + "/" + name
     txt = "# v10 (split) dataset YAML for attributes branch\n"
@@ -233,7 +234,8 @@ def make_dataset_yaml_v10(name, config_name=None,
     txt += "path: " + path + "\n"
     txt += "train: train/images\n"
     txt += "val: val/images\n"
-    txt += "nc: 5\n"
+    main_names = list(class_names) if class_names else ["person", "face", "vehicle", "animal", "weapon"]
+    txt += f"nc: {len(main_names)}\n"
     txt += "attributes: true\n"
     txt += "attr_nc: " + str(attr_nc) + "\n"
     txt += 'attr_label_format: "split"\n'
@@ -252,9 +254,6 @@ def make_dataset_yaml_v10(name, config_name=None,
         txt += "kpt_shape: [" + str(num_kpt) + ", 3]\n"
         txt += "flip_idx: " + str(flip_idx) + "\n"
     txt += "names:\n"
-    main_names = (class_names or [])[:5]
-    while len(main_names) < 5:
-        main_names.append("unknown")
     for c in main_names:
         txt += "    - " + c + "\n"
     txt += "attr_names:\n"
