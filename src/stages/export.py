@@ -5,6 +5,40 @@ import stuff
 import src.dataset_util as dsu
 from src.dataset_processor import DatasetProcessor, dataset_delete
 
+def _normalise_attribute_name(name):
+    if not isinstance(name, str):
+        return name
+    return name.replace(":", "_")
+
+def _resolve_attribute_deletes(attributes, attributes_to_delete):
+    if attributes_to_delete is None:
+        return [], [], []
+    if not isinstance(attributes_to_delete, list):
+        raise ValueError("filter_classes.attributes_to_delete must be a list")
+    if any(not isinstance(a, str) for a in attributes_to_delete):
+        raise ValueError("filter_classes.attributes_to_delete must contain strings")
+
+    attrs=attributes or []
+    attr_lookup={}
+    for i, attr in enumerate(attrs):
+        key=_normalise_attribute_name(attr)
+        if key not in attr_lookup:
+            attr_lookup[key]=[]
+        attr_lookup[key].append(i)
+
+    missing=[]
+    delete_indices=set()
+    for attr in attributes_to_delete:
+        key=_normalise_attribute_name(attr)
+        if key not in attr_lookup:
+            missing.append(attr)
+            continue
+        delete_indices.update(attr_lookup[key])
+
+    delete_indices=sorted(delete_indices)
+    deleted_attributes=[attrs[i] for i in delete_indices]
+    return delete_indices, deleted_attributes, sorted(missing)
+
 def build_task_export_dataset(dataset_yaml, config=None, face_kp=False, pose_kp=True):
     """
     Write dataset in v10 (split) format: one row per object with cls (0-4), bbox, 50 attr columns, keypoints.
@@ -79,7 +113,7 @@ def build_task_export_dataset(dataset_yaml, config=None, face_kp=False, pose_kp=
 
 def build_task_filter_classes(dataset_yaml, config=None, output_dataset_name=None, face_kp=False, pose_kp=True):
     """
-    Delete a list of classes from a dataset
+    Delete a list of classes and/or attributes from a dataset.
     """
     processor=DatasetProcessor(dataset_yaml,
                                task="val",
@@ -87,7 +121,9 @@ def build_task_filter_classes(dataset_yaml, config=None, output_dataset_name=Non
                                face_kp=face_kp,
                                pose_kp=pose_kp)
     class_names=processor.get_class_names()
+    attributes=processor.attributes or []
     classes_to_delete=dsu.get_param(processor.task, config, "classes_to_delete", [])
+    attributes_to_delete=dsu.get_param(processor.task, config, "attributes_to_delete", [])
     classes_to_filter_small=dsu.get_param(processor.task, config, "classes_to_filter_small", [])
     classes_to_strip_pose=dsu.get_param(processor.task, config, "classes_to_strip_pose", [])
     do_delete=dsu.get_param(processor.task, config, "delete_existing", False)
@@ -103,6 +139,10 @@ def build_task_filter_classes(dataset_yaml, config=None, output_dataset_name=Non
     strip_pose_mask=[False]*len(class_names)
 
     assert classes_poseattr is None
+
+    delete_attr_indices, deleted_attributes, missing_attributes=_resolve_attribute_deletes(attributes, attributes_to_delete)
+    delete_attr_index_set=set(delete_attr_indices)
+    attributes_out=[a for i, a in enumerate(attributes) if i not in delete_attr_index_set]
 
     n_out=0
     deleted_classes=[]
@@ -128,7 +168,7 @@ def build_task_filter_classes(dataset_yaml, config=None, output_dataset_name=Non
                                         class_names=classes_out,
                                         face_kp=face_kp,
                                         pose_kp=pose_kp,
-                                        attributes=processor.attributes)
+                                        attributes=attributes_out)
 
     dsu.dataset_copy_comments(dataset_yaml, out_yaml_path)
 
@@ -137,7 +177,13 @@ def build_task_filter_classes(dataset_yaml, config=None, output_dataset_name=Non
         out_processor=DatasetProcessor(out_yaml_path, task=task, append_log=True,
                                        pose_kp=pose_kp,
                                        face_kp=face_kp)
-        out_processor.log(f"======= {task} filter classes {deleted_classes} ============")
+        out_processor.log(
+            f"======= {task} filter classes {deleted_classes} attributes {deleted_attributes} ============"
+        )
+        if missing_attributes:
+            out_processor.log(
+                f" filter_classes: requested attributes not present and skipped: {missing_attributes}"
+            )
         desc=processor.config_name+"/"+processor.task+"/filter classes"
 
         for i in tqdm(range(processor.num_files), desc=desc.ljust(45), colour="#8080ff", smoothing=0.01):
@@ -157,6 +203,8 @@ def build_task_filter_classes(dataset_yaml, config=None, output_dataset_name=Non
                         g["pose_points"]=[0]*len(g["pose_points"])
                     if "face_points" in g:
                         g["face_points"]=[0]*len(g["face_points"])
+                if delete_attr_index_set and g.get("attrs") is not None:
+                    g["attrs"]=[v for ai, v in enumerate(g["attrs"]) if ai not in delete_attr_index_set]
                 out_gts.append(g)
             out_processor.add(processor.get_img_name(i),
                               processor.get_img_path(i),

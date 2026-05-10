@@ -73,7 +73,7 @@ LEGACY_DATASET_KEYS = {
     "write_v10": "generated datasets are already split v10; use export to copy/rename a dataset",
 }
 
-EXPECTED_CLASS_NAMES = ["person", "face", "vehicle", "animal", "weapon"]
+DEFAULT_CLASS_NAMES = ["person", "face", "vehicle", "animal", "weapon"]
 MODEL_KEYS = ("model", "check_model")
 MODEL_EXTENSIONS = (".pt", ".pth", ".onnx", ".engine")
 
@@ -128,8 +128,14 @@ def validate_dataset_config(dataset_name, dataset_config):
         raise ValueError(f"{dataset_name}: unknown general config keys {sorted(unknown_general_keys)}")
 
     class_names=general_config.get("class_names")
-    if class_names != EXPECTED_CLASS_NAMES:
-        raise ValueError(f"{dataset_name}: class_names must be exactly {EXPECTED_CLASS_NAMES}")
+    if not isinstance(class_names, list) or len(class_names)==0:
+        raise ValueError(f"{dataset_name}: class_names must be a non-empty list")
+    if any(not isinstance(c, str) or len(c)==0 for c in class_names):
+        raise ValueError(f"{dataset_name}: class_names must contain non-empty strings")
+    if len(set(class_names))!=len(class_names):
+        raise ValueError(f"{dataset_name}: class_names must not contain duplicates")
+    if "person" not in class_names:
+        raise ValueError(f"{dataset_name}: class_names must include 'person'")
 
     attributes=general_config.get("attributes")
     if isinstance(attributes, list) and len(attributes)>dsu.ATTR_NC_V10:
@@ -150,6 +156,53 @@ def validate_dataset_config(dataset_name, dataset_config):
                 raise ValueError(f"{dataset_name}: {stage_name}.per_class_thr must have {len(class_names)} entries")
 
     validate_stage_model_paths(dataset_name, dataset_config)
+
+def normalise_attribute_name(name):
+    if not isinstance(name, str):
+        return name
+    return name.replace(":", "_")
+
+def apply_filter_class_attribute_deletes(dataset_name, dataset_config):
+    filter_config=dataset_config.get("filter_classes")
+    if filter_config is None:
+        return
+    if not isinstance(filter_config, dict):
+        raise ValueError(f"{dataset_name}: filter_classes must be a dict")
+
+    attributes_to_delete=filter_config.get("attributes_to_delete")
+    if attributes_to_delete is None:
+        return
+    if not isinstance(attributes_to_delete, list):
+        raise ValueError(f"{dataset_name}: filter_classes.attributes_to_delete must be a list")
+    if any(not isinstance(a, str) for a in attributes_to_delete):
+        raise ValueError(f"{dataset_name}: filter_classes.attributes_to_delete must contain strings")
+
+    general_config=dataset_config.get("general")
+    attributes=general_config.get("attributes") if isinstance(general_config, dict) else None
+    if not isinstance(attributes, list):
+        raise ValueError(f"{dataset_name}: filter_classes.attributes_to_delete requires general.attributes list")
+
+    attr_lookup={}
+    for i, attr in enumerate(attributes):
+        key=normalise_attribute_name(attr)
+        if key not in attr_lookup:
+            attr_lookup[key]=[]
+        attr_lookup[key].append(i)
+
+    missing=[]
+    delete_indices=set()
+    for attr in attributes_to_delete:
+        key=normalise_attribute_name(attr)
+        if key not in attr_lookup:
+            missing.append(attr)
+            continue
+        delete_indices.update(attr_lookup[key])
+    if missing:
+        raise ValueError(f"{dataset_name}: filter_classes.attributes_to_delete contains unknown attributes {sorted(missing)}")
+
+    if not delete_indices:
+        return
+    general_config["attributes"]=[a for i, a in enumerate(attributes) if i not in delete_indices]
 
 def iter_stage_configs(config, list_config=False):
     if config is None:
@@ -281,6 +334,7 @@ def generate_dataset(path, config_filename, dataset_name, force_generate=False, 
 
     # create new empty dataset
     dataset_config=get_expanded_config(path, config_filename, dataset_name)
+    apply_filter_class_attribute_deletes(dataset_name, dataset_config)
     # check for OPENAI_API_KEY so it doesn't annoyingly crash later
     if "add_attributes" in dataset_config:
         openai_api_key = os.getenv('OPENAI_API_KEY')

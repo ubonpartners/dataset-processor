@@ -48,6 +48,15 @@ def build_task_import(processor, import_config, test=False):
             o.add_category_mapping(maps[c], c)
 
     ids=o.get_image_ids()
+    if test and loader=="PersonPath22Loader":
+        # In test mode for PersonPath22, sample frames from the whole split instead
+        # of always taking the first contiguous chunk.
+        test_shuffle_seed=int(dsu.get_param(processor.task, import_config, "test_shuffle_seed", 42))
+        ids=list(ids)
+        random.Random(test_shuffle_seed).shuffle(ids)
+        processor.log(
+            f"test mode: shuffled PersonPath22 ids with seed={test_shuffle_seed}"
+        )
     if len(ids) != len(set(ids)):
         print("WARNING: Duplicate ids")
     processor.log(f"found {len(ids)} ids, limiting to {max_images}")

@@ -22,6 +22,7 @@ from src.loaders.trackset_loader import TracksetLoader
 from src.loaders.widerperson_loader import WiderPersonLoader
 from src.loaders.crowdpose_loader import CrowdPoseLoader
 from src.loaders.rawimage_loader import RawimageLoader
+from src.loaders.personpath22_loader import PersonPath22Loader
 
 ATTR_NC_V10 = 50
 
@@ -929,7 +930,8 @@ def get_loader(name):
              "TracksetLoader":TracksetLoader,
              "WiderpersonLoader": WiderPersonLoader,
              "CrowdPoseLoader": CrowdPoseLoader,
-             "RawimageLoader": RawimageLoader}
+             "RawimageLoader": RawimageLoader,
+             "PersonPath22Loader": PersonPath22Loader}
 
     if not name in loaders:
         print("Could not find loader "+name)
