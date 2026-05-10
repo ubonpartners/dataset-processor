@@ -329,6 +329,29 @@ def get_expanded_config(path, config_filename, dataset_name):
             return ih_config
     return dataset_config
 
+def collect_model_folders_for_sync(config_path):
+    config=stuff.load_dictionary(config_path)
+    path=os.path.split(config_path)[0]
+    config_filename=os.path.split(config_path)[1]
+    folders=set()
+
+    def collect_from_obj(obj):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if key in MODEL_KEYS and is_path_like_model(value):
+                    if value.startswith("/mldata/models/"):
+                        folders.add(os.path.dirname(value))
+                collect_from_obj(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                collect_from_obj(item)
+
+    for dataset_name in config.get("datasets", {}):
+        dataset_config=get_expanded_config(path, config_filename, dataset_name)
+        collect_from_obj(dataset_config)
+
+    return sorted(folders)
+
 def generate_dataset(path, config_filename, dataset_name, force_generate=False, test=False):
     config = stuff.load_dictionary(os.path.join(path, config_filename))
 
@@ -534,6 +557,7 @@ if __name__ == '__main__':
     parser.add_argument('--llm-test',  type=str, default=None, help='run in LLM test')
     parser.add_argument('--filter', action='store_true', help='filter datasets')
     parser.add_argument('--postprocess', action='store_true', help='postprocess datasets')
+    parser.add_argument('--skip-gdrive-sync', action='store_true', help='skip model sync from gdrive at startup')
     opt = parser.parse_args()
     stuff.configure_root_logger(opt.logging)
     if opt.filter:
@@ -549,8 +573,12 @@ if __name__ == '__main__':
         llm_test(opt.llm_test)
         exit()
 
-    stuff.gdrive_sync_mldata("/mldata/models/standard_od/pt", "from_drive")
-    stuff.gdrive_sync_mldata("/mldata/models/specialist/pt", "from_drive")
-    stuff.gdrive_sync_mldata("/mldata/models/v8/pt", "from_drive")
+    if not opt.skip_gdrive_sync:
+        model_folders=collect_model_folders_for_sync(opt.config)
+        if len(model_folders)==0:
+            print("Warning: no model folders found in config for gdrive sync")
+        for model_folder in model_folders:
+            print(f"Gdrive_sync: ensuring model folder {model_folder}")
+            stuff.gdrive_sync_mldata(model_folder, "from_drive")
 
     process_dataset(opt.config, test=opt.test, postprocess_only=opt.postprocess)

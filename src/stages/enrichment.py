@@ -3,6 +3,13 @@ import stuff
 import src.dataset_util as dsu
 from src.llm_attributes import generate_person_attributes
 
+def _resolve_rfdetr_imgsz(model, imgsz):
+    # RF-DETR 2026 checkpoints currently fail to load at 672 due positional
+    # embedding size mismatch; use 704 as a temporary compatible size.
+    if isinstance(model, str) and model.startswith("rfdetr-") and imgsz == 672:
+        return 704
+    return imgsz
+
 def build_task_add_objects(processor, add_object_config):
     """
     Check dataset with a high quality object detector. If sufficiently confident detections are
@@ -20,6 +27,7 @@ def build_task_add_objects(processor, add_object_config):
     per_class_thr=dsu.get_param(processor.task, add_object_config, "per_class_thr",
                                 [thr]*len(processor.class_names))
 
+    imgsz=_resolve_rfdetr_imgsz(model, imgsz)
     processor.set_object_detector(model, imgsz=imgsz, thr=min(per_class_thr), half=True, rect=False, batch_size=16)
     added=[0]*len(processor.class_names)
     filtered=0
@@ -56,6 +64,7 @@ def build_task_mask_objects(processor, add_object_config):
     thr=dsu.get_param(processor.task, add_object_config, "thr", 0.5)
     iou_thr=dsu.get_param(processor.task, add_object_config, "iou_thr", 0.5)
     per_class_thr=dsu.get_param(processor.task, add_object_config, "per_class_thr", [thr]*len(processor.class_names))
+    imgsz=_resolve_rfdetr_imgsz(model, imgsz)
     processor.set_object_detector(model, imgsz=imgsz, thr=min(per_class_thr), half=True, rect=False, batch_size=16)
     masked=[0]*len(processor.class_names)
     desc=processor.config_name+"/"+processor.task+"/mask objects"
