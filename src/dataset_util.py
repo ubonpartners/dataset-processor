@@ -23,6 +23,7 @@ from src.loaders.widerperson_loader import WiderPersonLoader
 from src.loaders.crowdpose_loader import CrowdPoseLoader
 from src.loaders.rawimage_loader import RawimageLoader
 from src.loaders.personpath22_loader import PersonPath22Loader
+from src.loaders.jaad_loader import JAADLoader
 
 ATTR_NC_V10 = 50
 
@@ -930,7 +931,8 @@ def get_loader(name):
              "WiderpersonLoader": WiderPersonLoader,
              "CrowdPoseLoader": CrowdPoseLoader,
              "RawimageLoader": RawimageLoader,
-             "PersonPath22Loader": PersonPath22Loader}
+             "PersonPath22Loader": PersonPath22Loader,
+             "JAADLoader": JAADLoader}
 
     if not name in loaders:
         print("Could not find loader "+name)

@@ -169,15 +169,31 @@ def do_video(video, model, output_path=None, display=True):
     print("Quitting!")
     display.close()
 
-def do_img(image_file, model, display=True):
+def do_img(image_file, model, display=True, infer_path="yolo"):
 
-    yolo=ultralytics.YOLO(model)
-    class_names=[yolo.names[i] for i in range(len(yolo.names))]
+    infer_path=infer_path.lower()
+    assert infer_path in ["yolo", "wrapper", "inference_wrapper"], f"Unsupported infer_path {infer_path}"
 
-    attributes=[]
-    for c in class_names:
-        if c.startswith("person_"):
-            attributes.append("person:"+c[len("person_"):])
+    yolo=None
+    infer=None
+    if infer_path=="yolo":
+        yolo=ultralytics.YOLO(model)
+        class_names=[yolo.names[i] for i in range(len(yolo.names))]
+        attributes=[]
+        for c in class_names:
+            if c.startswith("person_"):
+                attributes.append("person:"+c[len("person_"):])
+    else:
+        infer=stuff.inference_wrapper(model,
+                                      thr=0.05,
+                                      nms_thr=0.45,
+                                      half=True,
+                                      max_det=500,
+                                      face_kp=True,
+                                      pose_kp=True,
+                                      fold_attributes=True)
+        class_names=infer.class_names
+        attributes=infer.attributes if infer.attributes is not None else []
 
     display_width=1600
     display_height=900
@@ -187,15 +203,20 @@ def do_img(image_file, model, display=True):
 
     while True:
         frame = cv2.imread(image_file)  # Read image
-        result=yolo(image_file, conf=0.1, half=True, max_det=500, iou=0.45)
-        out_det=stuff.yolo_results_to_dets(result[0],
-                                         det_thr=0.05,
-                                         yolo_class_names=class_names,
-                                         class_names=class_names,
-                                         attributes=attributes,
-                                         face_kp=True,
-                                         pose_kp=True,
-                                         fold_attributes=True)
+        if infer_path=="yolo":
+            result=yolo(image_file, conf=0.1, half=True, max_det=500, iou=0.45)
+            out_det=stuff.yolo_results_to_dets(result[0],
+                                             det_thr=0.05,
+                                             yolo_class_names=class_names,
+                                             class_names=class_names,
+                                             attributes=attributes,
+                                             face_kp=True,
+                                             pose_kp=True,
+                                             fold_attributes=True)
+        else:
+            # Use the decoded frame path here (instead of a JPEG filename) to keep
+            # preprocessing consistent with the YOLO path and avoid confidence drift.
+            out_det=infer.infer([frame])[0]
         display.clear()
 
         highlight_index=None
@@ -356,6 +377,11 @@ if __name__ == '__main__':
     parser.add_argument('--search', type=str, default=None, help='search attributes to display matching crops')
     parser.add_argument('--video', type=str, default=None)
     parser.add_argument('--img', type=str, default=None)
+    parser.add_argument('--img-infer-path',
+                        type=str,
+                        default="yolo",
+                        choices=["yolo", "wrapper", "inference_wrapper"],
+                        help='inference path for --img: yolo or stuff.inference_wrapper')
     parser.add_argument('--output', type=str, default=None)
     parser.add_argument('--batch-size', type=int, default=4)
     opt = parser.parse_args()
@@ -374,7 +400,7 @@ if __name__ == '__main__':
         exit()
 
     if opt.img!=None:
-        do_img(opt.img, opt.model)
+        do_img(opt.img, opt.model, infer_path=opt.img_infer_path)
         exit()
 
     if opt.video!=None:
